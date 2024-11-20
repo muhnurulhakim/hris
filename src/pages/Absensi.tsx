@@ -1,21 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import {
   getTodayAttendance,
   checkIn,
   checkOut,
   getCurrentShift,
   getAttendance,
+  getTodayTasks,
+  completeTask,
+  requestTaskEdit,
 } from '../utils/database';
-import type { Attendance } from '../types';
+import type { Attendance, Task } from '../types';
 
 export default function Absensi() {
   const { user } = useAuth();
   const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
   const [attendanceHistory, setAttendanceHistory] = useState<Attendance[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [tasks, setTasks] = useState<Task | null>(null);
+  const [editReason, setEditReason] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<string>('');
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -23,7 +30,7 @@ export default function Absensi() {
   }, []);
 
   useEffect(() => {
-    const loadAttendance = () => {
+    const loadData = () => {
       const today = getTodayAttendance(user.id);
       setTodayAttendance(today || null);
 
@@ -31,9 +38,12 @@ export default function Absensi() {
         (a: Attendance) => a.userId === user.id
       );
       setAttendanceHistory(history);
+
+      const todayTasks = getTodayTasks(user.id);
+      setTasks(todayTasks);
     };
 
-    loadAttendance();
+    loadData();
   }, [user.id]);
 
   const handleCheckIn = () => {
@@ -51,6 +61,25 @@ export default function Absensi() {
           a.id === attendance.id ? attendance : a
         )
       );
+    }
+  };
+
+  const handleTaskComplete = (taskId: string) => {
+    if (tasks?.tasks.find(t => t.id === taskId)?.completed) {
+      setSelectedTask(taskId);
+      setShowEditModal(true);
+    } else {
+      const updatedTasks = completeTask(user.id, taskId);
+      setTasks(updatedTasks);
+    }
+  };
+
+  const handleEditRequest = () => {
+    if (editReason.trim()) {
+      requestTaskEdit(user.id, selectedTask, editReason);
+      setShowEditModal(false);
+      setEditReason('');
+      setSelectedTask('');
     }
   };
 
@@ -115,6 +144,40 @@ export default function Absensi() {
         </div>
       </div>
 
+      {tasks && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Checklist Pekerjaan</h2>
+            <ClipboardList className="w-6 h-6 text-blue-600" />
+          </div>
+          <div className="space-y-4">
+            {tasks.tasks.map((task) => (
+              <div
+                key={task.id}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() => handleTaskComplete(task.id)}
+                    className="h-5 w-5 text-blue-600 rounded"
+                  />
+                  <span className={task.completed ? 'line-through text-gray-500' : ''}>
+                    {task.title}
+                  </span>
+                </div>
+                {task.completedAt && (
+                  <span className="text-sm text-gray-500">
+                    {format(new Date(task.completedAt), 'HH:mm')}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-semibold mb-4">Riwayat Absensi</h2>
         <div className="overflow-x-auto">
@@ -172,6 +235,35 @@ export default function Absensi() {
           </table>
         </div>
       </div>
+
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-4">Alasan Edit Checklist</h3>
+            <textarea
+              value={editReason}
+              onChange={(e) => setEditReason(e.target.value)}
+              className="w-full p-2 border rounded-lg mb-4"
+              rows={4}
+              placeholder="Masukkan alasan untuk mengedit checklist..."
+            />
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleEditRequest}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Kirim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

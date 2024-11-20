@@ -32,10 +32,13 @@ export interface Task {
 export interface AuthorizationRequest {
   id: string;
   userId: string;
-  type: 'edit_checklist' | 'other';
+  type: 'edit_checklist' | 'leave_request' | 'other';
   status: 'pending' | 'approved' | 'rejected';
   message: string;
-  createdAt: string;
   response?: string;
+  createdAt: string;
   respondedAt?: string;
+  startDate?: string;
+  endDate?: string;
+  leaveType?: 'sick' | 'annual' | 'other';
 }
